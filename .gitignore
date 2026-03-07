@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+*.log
+.env
+.streamlit/secrets.toml
+models*.txt
+output_log.txt
+*.exe
