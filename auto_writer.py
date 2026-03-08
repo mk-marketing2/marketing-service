@@ -26,6 +26,7 @@ TWITTER_API_KEY = os.environ.get("TWITTER_API_KEY", "")
 TWITTER_API_SECRET = os.environ.get("TWITTER_API_SECRET", "")
 TWITTER_ACCESS_TOKEN = os.environ.get("TWITTER_ACCESS_TOKEN", "")
 TWITTER_ACCESS_TOKEN_SECRET = os.environ.get("TWITTER_ACCESS_TOKEN_SECRET", "")
+SITE_URL = os.environ.get("SITE_URL", "https://marketing-site-next.vercel.app").rstrip('/')
 
 # ★ここが最重要ポイント！
 # Workbenchに表示されている最新のモデルIDを直接指定します
@@ -184,7 +185,7 @@ excerpt: "{clean_summary}"
                         print(f"❌ Git自動デプロイ失敗: {git_err}")
 
                     # Xへ投稿
-                    article_url = f"https://marketing-site-next.vercel.app/articles/{slug}"
+                    article_url = f"{SITE_URL}/articles/{slug}"
                     final_tweet_text = f"{tweet_text}\n{article_url}"
                     post_to_x(final_tweet_text)
             
