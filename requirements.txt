@@ -1,7 +1,7 @@
-streamlit==1.32.2
-matplotlib==3.8.3
-pandas==2.2.1
-numpy==1.26.4
+streamlit
+matplotlib
+pandas
+numpy
 scipy
 streamlit-option-menu
 pyarrow
