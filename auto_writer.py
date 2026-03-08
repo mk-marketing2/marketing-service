@@ -121,15 +121,47 @@ if __name__ == "__main__":
                 
                 article = call_claude_direct(prompt, system_p)
                 if article:
-                    # 保存
-                    if not os.path.exists(SAVE_DIR): os.makedirs(SAVE_DIR)
-                    filename = f"{SAVE_DIR}/{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-                    with open(filename, "w", encoding="utf-8") as f: f.write(article)
+                    # Next.js用のFrontmatter（YAML）を作成
+                    date_str = datetime.datetime.now().strftime('%Y-%m-%d')
+                    summary_text = call_claude_direct(f"次の記事を40文字以内で要約して: {article[:1000]}")
+                    clean_summary = summary_text.replace('"', '').replace('\n', '') if summary_text else "最新のマーケティング情報"
+                    clean_title = news['title'].replace('"', '')
+
+                    frontmatter = f"""---
+title: "{clean_title}"
+date: "{date_str}"
+excerpt: "{clean_summary}"
+---
+
+"""
+                    
+                    # 保存先をNext.jsのcontentフォルダに変更
+                    NEXTJS_CONTENT_DIR = "marketing-site-next/src/content"
+                    if not os.path.exists(NEXTJS_CONTENT_DIR): 
+                        os.makedirs(NEXTJS_CONTENT_DIR)
+                        
+                    slug = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                    filename = f"{NEXTJS_CONTENT_DIR}/{slug}.md"
+                    
+                    with open(filename, "w", encoding="utf-8") as f: 
+                        f.write(frontmatter + article)
                     print(f"✅ 保存完了: {filename}")
                     
-                    # 要約と投稿
-                    summary = call_claude_direct(f"40文字で要約して: {article[:1000]}")
-                    post_to_x(news['title'], summary, "https://your-blog-link.com")
+                    # --- GitHubへ自動Push ---
+                    print("🚀 GitHubへ自動デプロイ中...")
+                    import subprocess
+                    try:
+                        # marketing-site-next フォルダ内でgitコマンドを実行
+                        repo_dir = "marketing-site-next"
+                        subprocess.run(["git", "add", "."], cwd=repo_dir, check=True)
+                        subprocess.run(["git", "commit", "-m", f"Auto-publish: {clean_title}"], cwd=repo_dir, check=True)
+                        subprocess.run(["git", "push", "origin", "main"], cwd=repo_dir, check=True)
+                        print("✅ GitHubへの自動デプロイ完了")
+                    except Exception as git_err:
+                        print(f"❌ Git自動デプロイ失敗: {git_err}")
+
+                    # Xへ投稿
+                    post_to_x(news['title'], clean_summary, f"https://marketing-site-next.vercel.app/articles/{slug}")
             
             print(f"💤 {CHECK_INTERVAL_HOURS}時間待機します...")
             time.sleep(CHECK_INTERVAL_HOURS * 3600)
