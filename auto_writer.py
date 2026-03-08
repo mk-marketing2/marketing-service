@@ -89,14 +89,14 @@ def fetch_content(keyword):
         return res['results'][0] if res['results'] else None
     except: return None
 
-def post_to_x(title, summary, link):
+def post_to_x(tweet_text):
     print("🐦 X投稿中...")
     try:
         client = tweepy.Client(
             consumer_key=TWITTER_API_KEY, consumer_secret=TWITTER_API_SECRET,
             access_token=TWITTER_ACCESS_TOKEN, access_token_secret=TWITTER_ACCESS_TOKEN_SECRET
         )
-        client.create_tweet(text=f"【新着記事】{title}\n\n{summary}...\n\n👇 続き\n{link}")
+        client.create_tweet(text=tweet_text)
         print("✅ 投稿成功")
     except Exception as e: print(f"❌ X失敗: {e}")
 
@@ -132,6 +132,24 @@ if __name__ == "__main__":
                     title_text = call_claude_direct(title_prompt)
                     clean_title = title_text.replace('"', '').replace('\n', '') if title_text else news['title'].replace('"', '')
 
+                    tweet_prompt = f"""次の記事文案をもとに、専門家としての鋭い考察を感じさせる「インサイト型」のX（Twitter）投稿文を作成してください。
+
+[条件]
+- 文字数はトータルで110文字以内（URL用の文字数を残すため）
+- 「ボットによる新着通知」ではなく「専門家による分析のシェア」というスタンス
+- 語尾は「〜です」「〜と言えます」等、知的で落ち着いたトーン
+- 冒頭は【業界分析】や【経営の視点】等の角括弧から始め、核心的なテーマを提示
+- 中段は数字やキーワードを引用し、意味を要約
+- 結びは「続きはサイトで詳しく読み解きます」とする
+- ハッシュタグは文末に #カチスジ #飲食店経営 
+- スマホで見やすいよう適度な改行を入れること
+
+[記事文案]
+{article[:1500]}"""
+                    tweet_text = call_claude_direct(tweet_prompt)
+                    if not tweet_text:
+                        tweet_text = "【経営の視点】最新の業界動向と経営インサイトを更新しました。\n\n続きはサイトで詳しく読み解きます。\n\n#カチスジ #飲食店経営"
+
                     frontmatter = f"""---
 title: "{clean_title}"
 date: "{date_str}"
@@ -166,7 +184,9 @@ excerpt: "{clean_summary}"
                         print(f"❌ Git自動デプロイ失敗: {git_err}")
 
                     # Xへ投稿
-                    post_to_x(news['title'], clean_summary, f"https://marketing-site-next.vercel.app/articles/{slug}")
+                    article_url = f"https://marketing-site-next.vercel.app/articles/{slug}"
+                    final_tweet_text = f"{tweet_text}\n{article_url}"
+                    post_to_x(final_tweet_text)
             
             print(f"💤 {CHECK_INTERVAL_HOURS}時間待機します...")
             time.sleep(CHECK_INTERVAL_HOURS * 3600)
