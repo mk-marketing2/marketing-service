@@ -8,6 +8,9 @@ import urllib.error
 import ssl
 from tavily import TavilyClient
 import tweepy
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ==========================================
 # 🔑 設定エリア（最新モデル: Sonnet 4-6 指定）
@@ -117,7 +120,7 @@ if __name__ == "__main__":
             
             if news:
                 system_p = "あなたは辛口の数学マーケターです。論理的に飲食店経営を語ってください。"
-                prompt = f"ニュースタイトル: {news['title']}\n内容: {news['content'][:5000]}\nこれをもとにブログを書いて。"
+                prompt = f"ニュースタイトル: {news['title']}\n内容: {news['content'][:5000]}\nこれをもとにブログを書いて。ただし、記事のタイトル（# 見出し1）は出力に含めず、本文（## 見出し2以降）から書き始めてください。"
                 
                 article = call_claude_direct(prompt, system_p)
                 if article:
@@ -125,7 +128,9 @@ if __name__ == "__main__":
                     date_str = datetime.datetime.now().strftime('%Y-%m-%d')
                     summary_text = call_claude_direct(f"次の記事を40文字以内で要約して: {article[:1000]}")
                     clean_summary = summary_text.replace('"', '').replace('\n', '') if summary_text else "最新のマーケティング情報"
-                    clean_title = news['title'].replace('"', '')
+                    title_prompt = f"次の記事の魅力的で簡潔なタイトルを30文字以内で作成してください。出力はタイトルのみとし、カギ括弧等の装飾は含めないで: {article[:1000]}"
+                    title_text = call_claude_direct(title_prompt)
+                    clean_title = title_text.replace('"', '').replace('\n', '') if title_text else news['title'].replace('"', '')
 
                     frontmatter = f"""---
 title: "{clean_title}"
