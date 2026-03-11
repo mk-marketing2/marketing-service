@@ -10,3 +10,8 @@ tavily-python
 tweepy
 google-generativeai
 python-dotenv
+crewai
+langchain-anthropic
+crewai-tools
+fastapi
+uvicorn
