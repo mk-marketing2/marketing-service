@@ -10,6 +10,9 @@ import httpx
 import re
 from datetime import datetime
 from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -74,6 +77,7 @@ app.add_middleware(
 class ReportRequest(BaseModel):
     area: str
     business_type: str
+    email: str | None = None
 
 class ReportResponse(BaseModel):
     status: str
@@ -136,10 +140,36 @@ def post_to_x(tweet_text: str):
     except Exception as e: 
         logger.error(f"❌ X失敗: {e}")
 
+def send_email(to_address: str, subject: str, body_text: str):
+    logger.info(f"📧 Sending email to {to_address}...")
+    try:
+        gmail_user = os.environ.get("GMAIL_ADDRESS")
+        gmail_password = os.environ.get("GMAIL_APP_PASSWORD")
+
+        if not gmail_user or not gmail_password:
+            logger.warning("Email credentials missing. Cannot send email.")
+            return
+        
+        msg = MIMEMultipart()
+        msg['From'] = gmail_user
+        msg['To'] = to_address
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body_text, 'plain'))
+        
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(gmail_user, gmail_password)
+        server.send_message(msg)
+        server.quit()
+        logger.info("✅ Email sent successfully.")
+    except Exception as e:
+        logger.error(f"❌ Failed to send email: {e}")
+
 # ---------------------------------------------------------
 # Core CrewAI Worker Task
 # ---------------------------------------------------------
-def run_crewai_pipeline(area: str, business_type: str):
+def run_crewai_pipeline(area: str, business_type: str, email: str | None = None):
     logger.info(f"🚀 バックグラウンド処理開始: {area} × {business_type}")
     
     try:
@@ -285,6 +315,20 @@ excerpt: "{excerpt}"
         final_tweet_text = f"{tweet}\n{article_url}"
         post_to_x(final_tweet_text)
         
+        # 5. メール送信 (入力されていた場合)
+        if email:
+            email_subject = f"【AI出店診断】{area}×{business_type} の分析レポートが完了しました"
+            email_body = f"""お申し込みありがとうございます。
+{area}周辺の「{business_type}」に関するAI出店診断レポートが完了いたしました。
+実在する競合データを基に、確率思考のCMOエージェントが導き出した勝筋をまとめています。
+
+▼ 以下のURLより、生成された戦略レポート記事をご確認いただけます。
+{article_url}
+
+---
+カチスジ AIコンサルティングチーム"""
+            send_email(email, email_subject, email_body)
+
         logger.info(f"🎉 バックグラウンド処理終了: {area} × {business_type}")
         
     except Exception as e:
@@ -305,7 +349,7 @@ async def generate_report(request: ReportRequest, background_tasks: BackgroundTa
     # （Cloud Runの場合、レスポンス後も一定時間CPUが割り当てられるように設定するか、
     #  単一リクエストのタイムアウトを伸ばして非同期awaitにする構成がありますが、
     #  Step1としてはFastAPI標準のバックグラウンドタスクを採用します）
-    background_tasks.add_task(run_crewai_pipeline, request.area, request.business_type)
+    background_tasks.add_task(run_crewai_pipeline, request.area, request.business_type, request.email)
     
     return ReportResponse(
         status="accepted",
