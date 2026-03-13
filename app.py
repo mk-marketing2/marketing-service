@@ -212,8 +212,8 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
         )
 
         task2 = Task(
-            description=f'リサーチャーのリアルな競合データを分析し、「{area}」で「{business_type}」を成功させる戦略を立案してください。\n1. 勝算判定\n2. プレファレンス向上策\n3. WHO/WHAT/HOW\n\n【重要】出力するレポートには、記事のタイトルとなる大見出し（# 見出し1）は絶対に含めないでください。本文（## 見出し2以降）から書き始めてください。',
-            expected_output='論理的で辛口な戦略コンサルティングレポート（Markdown形式。# 見出し1を含まないこと）',
+            description=f'リサーチャーのリアルな競合データを分析し、「{area}」で「{business_type}」を成功させる戦略を立案してください。\n1. 勝算判定\n2. プレファレンス向上策\n3. WHO/WHAT/HOW\n\n【重要事項】\n- 出力するレポートには、記事のタイトルとなる大見出し（# 見出し1）は絶対に含めないでください。本文（## 見出し2以降）から書き始めてください。\n- 「承知いたしました」「CMOとしてレポートを作成します」「以上が戦略です」などのAI特有の会話的な前置きやメタコメントは一切出力しないでください。純粋な記事の本文のみを出力してください。',
+            expected_output='会話的な相槌を一切含まない、純粋な論理的戦略コンサルティングレポートのMarkdown本文のみ（# 見出し1を含まないこと）',
             agent=strategist
         )
 
@@ -230,6 +230,18 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
         
         # H1重複防止のストリップ
         report_markdown = re.sub(r'(?m)^\s*#\s+[^\n]+\n+', '', report_markdown, count=1)
+        
+        # AI特有のメタコメントや前置きを強制除去
+        unwanted_patterns = [
+            r"^十分な競合データが揃っているため、リサーチャーへの追加質問は不要と判断し、CMOとして直接戦略レポートを作成します。?\n*",
+            r"^承知いたしました。.*?\n",
+            r"^以下の通り、.*?\n",
+            r"^それでは、.*?\n"
+        ]
+        for pattern in unwanted_patterns:
+            report_markdown = re.sub(pattern, '', report_markdown, flags=re.MULTILINE)
+        
+        report_markdown = report_markdown.lstrip()
         
         if not report_markdown or len(report_markdown) < 100:
             logger.warning("⚠️ レポート生成に失敗したようです。スキップします。")
