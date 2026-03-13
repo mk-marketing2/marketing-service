@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+from markdown_pdf import MarkdownPdf, Section
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -140,7 +142,7 @@ def post_to_x(tweet_text: str):
     except Exception as e: 
         logger.error(f"❌ X失敗: {e}")
 
-def send_email(to_address: str, subject: str, body_text: str):
+def send_email(to_address: str, subject: str, body_text: str, attachment_path: str | None = None):
     logger.info(f"📧 Sending email to {to_address}...")
     try:
         gmail_user = os.environ.get("GMAIL_ADDRESS")
@@ -156,6 +158,12 @@ def send_email(to_address: str, subject: str, body_text: str):
         msg['Subject'] = subject
         
         msg.attach(MIMEText(body_text, 'plain'))
+
+        if attachment_path and os.path.exists(attachment_path):
+            with open(attachment_path, "rb") as f:
+                part = MIMEApplication(f.read(), Name=os.path.basename(attachment_path))
+            part['Content-Disposition'] = f'attachment; filename="{os.path.basename(attachment_path)}"'
+            msg.attach(part)
         
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
@@ -317,17 +325,35 @@ excerpt: "{excerpt}"
         
         # 5. メール送信 (入力されていた場合)
         if email:
+            pdf_filename = f"/tmp/report_{slug}.pdf" if os.environ.get("K_SERVICE") else f"report_{slug}.pdf"
+            try:
+                # MarkdownをPDFに変換して保存
+                pdf = MarkdownPdf(toc_level=2)
+                pdf_content = f"# {title}\n\n{report_markdown}"
+                pdf.add_section(Section(pdf_content))
+                pdf.save(pdf_filename)
+                logger.info(f"✅ PDF生成完了: {pdf_filename}")
+            except Exception as e:
+                logger.error(f"❌ PDF生成エラー: {e}")
+                pdf_filename = None
+
             email_subject = f"【AI出店診断】{area}×{business_type} の分析レポートが完了しました"
             email_body = f"""お申し込みありがとうございます。
 {area}周辺の「{business_type}」に関するAI出店診断レポートが完了いたしました。
-実在する競合データを基に、確率思考のCMOエージェントが導き出した勝筋をまとめています。
+実在する競合データを基に、確率思考のCMOエージェントが導き出した勝筋をPDF形式にて添付しております。
 
-▼ 以下のURLより、生成された戦略レポート記事をご確認いただけます。
-{article_url}
+ぜひ貴社のビジネス検証やご出店の戦略にお役立てください。
 
 ---
 カチスジ AIコンサルティングチーム"""
-            send_email(email, email_subject, email_body)
+            send_email(email, email_subject, email_body, attachment_path=pdf_filename)
+            
+            # クリーンアップ（Cloud Runのメモリを圧迫しないよう削除）
+            if pdf_filename and os.path.exists(pdf_filename):
+                try:
+                    os.remove(pdf_filename)
+                except Exception:
+                    pass
 
         logger.info(f"🎉 バックグラウンド処理終了: {area} × {business_type}")
         
