@@ -259,7 +259,8 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
 {{
   "title": "Next.js用のSEOを意識した記事タイトル（例：勝率思考で紐解く、新宿駅東口高級焼肉の生存戦略）",
   "excerpt": "記事の要約（120文字以内）",
-  "tweet": "X用のインサイト型投稿文。"
+  "tweet": "X用のインサイト型投稿文。",
+  "image_prompt": "{area}の{business_type}を美しく表現する、AI画像生成用の「英語」のプロンプト（例: A highly detailed, cinematic photography of a modern standing sushi bar in Shinbashi, Tokyo at night, neon lights, professional lighting, 8k resolution.）"
 }}
 
 【X用投稿文（tweet）のルール】
@@ -279,12 +280,18 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
             meta_data = {
                 "title": f"勝率思考で紐解く、{area}の{business_type}戦略",
                 "excerpt": f"{area}エリアにおける{business_type}の勝筋についてデータで解説します。",
-                "tweet": f"【エリア分析】{area}×{business_type}の成功要因を考察しました。\n続きはサイトで。\n#カチスジ"
+                "tweet": f"【エリア分析】{area}×{business_type}の成功要因を考察しました。\n続きはサイトで。\n#カチスジ",
+                "image_prompt": f"A beautiful photographic establishing shot of a {business_type} in {area}, Japan, professional lighting, highly detailed"
             }
 
         title = meta_data.get("title", f"{area}の{business_type}戦略").replace('"', '')
         excerpt = meta_data.get("excerpt", "").replace('"', '').replace('\n', '')
         tweet = meta_data.get("tweet", "")
+        image_prompt = meta_data.get("image_prompt", f"A beautiful cinematic photo of {business_type} in {area}")
+
+        import urllib.parse
+        encoded_prompt = urllib.parse.quote(image_prompt)
+        thumbnail_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=630&nologo=true"
 
         date_str = datetime.now().strftime('%Y-%m-%d')
         slug = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -293,6 +300,7 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
 title: "{title}"
 date: "{date_str}"
 excerpt: "{excerpt}"
+thumbnail: "{thumbnail_url}"
 ---
 
 """
