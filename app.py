@@ -6,6 +6,7 @@ import asyncio
 import ssl
 import urllib.request
 import urllib.error
+import base64
 import httpx
 import re
 from datetime import datetime
@@ -46,6 +47,7 @@ load_dotenv()
 os.environ["OPENAI_API_KEY"] = "NA"
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 TWITTER_API_KEY = os.environ.get("TWITTER_API_KEY", "")
 TWITTER_API_SECRET = os.environ.get("TWITTER_API_SECRET", "")
 TWITTER_ACCESS_TOKEN = os.environ.get("TWITTER_ACCESS_TOKEN", "")
@@ -174,6 +176,55 @@ def send_email(to_address: str, subject: str, body_text: str, attachment_path: s
     except Exception as e:
         logger.error(f"❌ Failed to send email: {e}")
 
+def generate_thumbnail(image_prompt: str, slug: str) -> str | None:
+    """
+    Imagen 4.0 Fast (v1beta REST predict) を使って画像を生成し、
+    marketing-site-next/public/images/{slug}.png に保存。
+    成功したら Web 上のパス文字列 '/images/{slug}.png' を返す。
+    失敗した場合は None を返す。
+    """
+    if not GEMINI_API_KEY:
+        logger.warning("⚠️ GEMINI_API_KEY が未設定のため画像生成をスキップします")
+        return None
+    
+    logger.info(f"🎨 Imagen 4.0 で画像生成中... prompt: {image_prompt[:80]}")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-fast-generate-001:predict?key={GEMINI_API_KEY}"
+    payload = {
+        "instances": [{"prompt": image_prompt}],
+        "parameters": {"sampleCount": 1, "aspectRatio": "16:9"}
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    try:
+        with urllib.request.urlopen(req, context=ctx) as resp:
+            body = json.loads(resp.read().decode())
+            predictions = body.get('predictions', [])
+            if predictions and 'bytesBase64Encoded' in predictions[0]:
+                img_bytes = base64.b64decode(predictions[0]['bytesBase64Encoded'])
+                images_dir = os.path.join("marketing-site-next", "public", "images")
+                os.makedirs(images_dir, exist_ok=True)
+                img_path = os.path.join(images_dir, f"{slug}.png")
+                with open(img_path, "wb") as f:
+                    f.write(img_bytes)
+                logger.info(f"✅ 画像保存完了: {img_path} ({len(img_bytes):,} bytes)")
+                return f"/images/{slug}.png"
+            else:
+                logger.warning(f"⚠️ 画像データが見つかりません: {list(body.keys())}")
+                return None
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()
+        logger.error(f"❌ Imagen API HTTPエラー {e.code}: {error_body[:300]}")
+        return None
+    except Exception as e:
+        logger.error(f"❌ Imagen API エラー: {e}")
+        return None
+
+
 # ---------------------------------------------------------
 # Core CrewAI Worker Task
 # ---------------------------------------------------------
@@ -287,24 +338,24 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
         title = meta_data.get("title", f"{area}の{business_type}戦略").replace('"', '')
         excerpt = meta_data.get("excerpt", "").replace('"', '').replace('\n', '')
         tweet = meta_data.get("tweet", "")
-        image_prompt = meta_data.get("image_prompt", f"A beautiful cinematic photo of {business_type} in {area}")
-
-        import hashlib
-        seed = hashlib.md5(title.encode('utf-8')).hexdigest()
-        thumbnail_url = f"https://picsum.photos/seed/{seed}/1200/630"
+        image_prompt = meta_data.get("image_prompt", f"A professional cinematic photo of a {business_type} restaurant in {area}, Japan, beautiful lighting")
 
         date_str = datetime.now().strftime('%Y-%m-%d')
         slug = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        # 3. Imagen 4.0 Fast で画像生成
+        thumbnail_path = generate_thumbnail(image_prompt, slug)
+        thumbnail_value = thumbnail_path if thumbnail_path else ""
         
         frontmatter = f"""---
 title: "{title}"
 date: "{date_str}"
 excerpt: "{excerpt}"
-thumbnail: "{thumbnail_url}"
+thumbnail: "{thumbnail_value}"
 ---
 
 """
-        # 3. ファイル保存 (GitHub連携など)
+        # 4. ファイル保存 (GitHub連携など)
         # ※Cloud Run上で動作するため書き込み権限とGitの運用は要検討。
         # 今回要件のStep1としてファイル生成＆リモートリポジトリpush、またはログ出力を残す。
         if not os.path.exists(NEXTJS_CONTENT_DIR): 
