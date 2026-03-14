@@ -56,21 +56,19 @@ for md_file in sorted(content_dir.glob("*.md")):
     with open(md_file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Skip if already has a local image (not Picsum or blank)
+    # Skip only if we already have a valid image and it doesn't contain text (regenerate all)
     thumb_match = re.search(r'^thumbnail:\s*"(.*?)"', content, re.MULTILINE)
-    current_thumb = thumb_match.group(1) if thumb_match else ""
-    if current_thumb.startswith("/images/") and not current_thumb.startswith("/images/test_"):
-        print(f"⏭️  Skipping {slug} (already has local image)")
-        continue
 
     # Extract title for building the image prompt
     title_match = re.search(r'^title:\s*"(.*?)"', content, re.MULTILINE)
     title = title_match.group(1) if title_match else slug
 
-    # Generate a relevant English prompt from the title
+    # Generate a relevant English prompt - explicitly no text, no watermarks
     image_prompt = (
-        f"A professional, photorealistic, cinematic photograph for a Japanese restaurant consulting article titled: "
-        f"{title}. Beautiful lighting, modern interior, food industry, high quality, 8k"
+        f"A professional photorealistic cinematic photograph, Japanese restaurant business scene, "
+        f"inspired by the theme: {title}. "
+        f"Beautiful atmospheric lighting, modern interior, food industry. "
+        f"No text, no letters, no words, no watermarks, no labels, no signs with writing. Pure photography."
     )
 
     print(f"📷 Generating for: {slug}")

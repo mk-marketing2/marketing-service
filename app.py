@@ -338,7 +338,10 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
         title = meta_data.get("title", f"{area}の{business_type}戦略").replace('"', '')
         excerpt = meta_data.get("excerpt", "").replace('"', '').replace('\n', '')
         tweet = meta_data.get("tweet", "")
-        image_prompt = meta_data.get("image_prompt", f"A professional cinematic photo of a {business_type} restaurant in {area}, Japan, beautiful lighting")
+        image_prompt = meta_data.get("image_prompt", f"A professional cinematic photo of a {business_type} restaurant in {area}, Japan, beautiful lighting, no text, no words")
+        # Enforce no-text constraint on all prompts
+        if "no text" not in image_prompt.lower():
+            image_prompt += ". No text, no letters, no words, no watermarks, no labels. Pure photography."
 
         date_str = datetime.now().strftime('%Y-%m-%d')
         slug = datetime.now().strftime('%Y%m%d_%H%M%S')
