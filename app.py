@@ -289,9 +289,9 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
         tweet = meta_data.get("tweet", "")
         image_prompt = meta_data.get("image_prompt", f"A beautiful cinematic photo of {business_type} in {area}")
 
-        import urllib.parse
-        encoded_prompt = urllib.parse.quote(image_prompt)
-        thumbnail_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=630&nologo=true"
+        import hashlib
+        seed = hashlib.md5(title.encode('utf-8')).hexdigest()
+        thumbnail_url = f"https://picsum.photos/seed/{seed}/1200/630"
 
         date_str = datetime.now().strftime('%Y-%m-%d')
         slug = datetime.now().strftime('%Y%m%d_%H%M%S')
