@@ -356,14 +356,55 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
         logger.info("📝 Claude: メタデータ生成中...")
         system_prompt = "あなたは返答を必ずJSON形式で出力するAIです。Markdownのコードブロックは付けず、純粋なJSONテキストのみを出力してください。"
         user_message = f"""
-以下のコンサルティングレポートを基にして、指定した3つの要素をJSON形式で抽出・生成してください。
+以下のコンサルティングレポートを基にして、指定した4つの要素をJSON形式で抽出・生成してください。
 
 【出力指定フォーマット】
 {{
   "title": "SEOを意識した記事タイトル。「勝率思考で紐解く」「市場の死角」「なぜ〇〇は失敗するのか」等の知的・逆張り系コピーを使うこと（例：渋谷カフェ市場の「3つの空白」を突け——競合7店舗データが示す新規参入の勝ち筋）",
   "excerpt": "記事の要約（120文字以内）。断言調で書くこと。「〜でしょう」等の曖昧表現禁止。",
   "tweet": "X用インサイト型投稿文。専門家としての鋭い確信を持った口調で書くこと。",
-  "image_prompt": "A professional photorealistic cinematic photograph, Japanese restaurant business scene in {area}, inspired by {business_type}. Beautiful atmospheric lighting, modern interior. No text, no letters, no words, no watermarks. Pure photography."
+  "image_prompt": "A professional photorealistic cinematic photograph, Japanese restaurant business scene in {area}, inspired by {business_type}. Beautiful atmospheric lighting, modern interior. No text, no letters, no words, no watermarks. Pure photography.",
+  "diagram": {{記事の内容に最も適した図解データ。以下の3種類から1つを選んで生成すること}}
+}}
+
+【diagramフィールドの生成ルール】
+記事内容を分析し、以下3種類のうち最も適切な1つを生成してください。
+
+■ 種類1: PositioningMap（競合のポジショニングを2軸で可視化する場合）
+{{
+  "type": "PositioningMap",
+  "title": "競合ポジショニングマップ",
+  "xLabel": "横軸のラベル（例：価格帯 低←→高）",
+  "yLabel": "縦軸のラベル（例：予約しやすさ 難←→易）",
+  "points": [
+    {{"label": "競合店名A", "x": 30, "y": 40}},
+    {{"label": "競合店名B", "x": 70, "y": 20}},
+    {{"label": "競合店名C", "x": 50, "y": 60}}
+  ],
+  "targetZone": {{"x": 75, "y": 80, "label": "参入機会ゾーン"}}
+}}
+
+■ 種類2: ThreePoints（市場の死角・問題点・施策を3点で整理する場合）
+{{
+  "type": "ThreePoints",
+  "title": "市場の3つの構造的問題",
+  "variant": "warning",
+  "points": [
+    {{"title": "問題点1のタイトル", "body": "具体的な説明（記事データに基づく）"}},
+    {{"title": "問題点2のタイトル", "body": "具体的な説明"}},
+    {{"title": "問題点3のタイトル", "body": "具体的な説明"}}
+  ]
+}}
+
+■ 種類3: StepFlow（参入戦略・実行ステップを順序立てて示す場合）
+{{
+  "type": "StepFlow",
+  "title": "参入戦略ステップ",
+  "steps": [
+    {{"step": "1", "title": "ステップ1のタイトル", "body": "具体的な説明", "tag": "最優先"}},
+    {{"step": "2", "title": "ステップ2のタイトル", "body": "具体的な説明"}},
+    {{"step": "3", "title": "ステップ3のタイトル", "body": "具体的な説明"}}
+  ]
 }}
 
 【X用投稿文（tweet）のルール】
@@ -392,6 +433,7 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
         excerpt = meta_data.get("excerpt", "").replace('"', '').replace('\n', '')
         tweet = meta_data.get("tweet", "")
         image_prompt = meta_data.get("image_prompt", f"A professional cinematic photo of a {business_type} restaurant in {area}, Japan, beautiful lighting, no text, no words")
+        diagram_data = meta_data.get("diagram", None)
         # Enforce no-text constraint on all prompts
         if "no text" not in image_prompt.lower():
             image_prompt += ". No text, no letters, no words, no watermarks, no labels. Pure photography."
@@ -402,13 +444,20 @@ def run_crewai_pipeline(area: str, business_type: str, email: str | None = None)
         # 3. Imagen 4.0 Fast で画像生成
         thumbnail_path = generate_thumbnail(image_prompt, slug)
         thumbnail_value = thumbnail_path if thumbnail_path else ""
+
+        # diagram フィールドをフロントマターに追加（JSONをシングルクォート文字列として埋め込む）
+        import json as _json
+        diagram_line = ""
+        if diagram_data:
+            diagram_json_str = _json.dumps(diagram_data, ensure_ascii=False).replace("'", "\\'")
+            diagram_line = f"diagram: '{diagram_json_str}'\n"
         
         frontmatter = f"""---
 title: "{title}"
 date: "{date_str}"
 excerpt: "{excerpt}"
 thumbnail: "{thumbnail_value}"
----
+{diagram_line}---
 
 """
         # 4. ファイル保存 (GitHub連携など)
